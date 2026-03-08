@@ -1,0 +1,24 @@
+# Environment & secrets
+.env
+*.key
+*.pem
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+venv/
+.venv/
+
+# Docker
+docker-compose.override.yml
+
+# LocalStack
+.localstack/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
