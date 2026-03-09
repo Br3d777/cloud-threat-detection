@@ -31,13 +31,3 @@ volumes:
   shared-alerts:
   shared-incidents:
 ```
-
-Save and close, then:
-```
-git add docker-compose.yml
-```
-```
-git commit -m "infra: add docker-compose with LocalStack and dashboard services"
-```
-```
-git push
