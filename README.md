@@ -28,7 +28,11 @@
 
 # ---
 
-# 
+# ## 📸 Dashboard
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+---
 
 # \## 🔍 What This Does
 
