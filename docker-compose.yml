@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   localstack:
@@ -9,7 +7,6 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=s3,iam,sns,sqs,logs
-      - DEFAULT_REGION=us-east-1
     volumes:
       - ./localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
     healthcheck:
@@ -18,16 +15,56 @@ services:
       timeout: 5s
       retries: 5
 
+  log-generator:
+    build: ./log-generator
+    container_name: ctd-generator
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      - EVENTS_DIR=/tmp/events
+    volumes:
+      - shared-events:/tmp/events
+
+  detection-engine:
+    build: ./detection-engine
+    container_name: ctd-detector
+    depends_on:
+      - log-generator
+    environment:
+      - EVENTS_DIR=/tmp/events
+      - ALERTS_DIR=/tmp/alerts
+    volumes:
+      - shared-events:/tmp/events
+      - shared-alerts:/tmp/alerts
+
+  incident-responder:
+    build: ./incident-response
+    container_name: ctd-responder
+    depends_on:
+      - detection-engine
+    environment:
+      - ALERTS_DIR=/tmp/alerts
+      - INCIDENTS_DIR=/tmp/incidents
+    volumes:
+      - shared-alerts:/tmp/alerts
+      - shared-incidents:/tmp/incidents
+
   dashboard:
     build: ./dashboard
     container_name: ctd-dashboard
     ports:
       - "8080:8080"
+    depends_on:
+      - detection-engine
+    environment:
+      - ALERTS_DIR=/tmp/alerts
+      - INCIDENTS_DIR=/tmp/incidents
     volumes:
       - shared-alerts:/tmp/alerts
       - shared-incidents:/tmp/incidents
 
 volumes:
+  shared-events:
   shared-alerts:
   shared-incidents:
-```
