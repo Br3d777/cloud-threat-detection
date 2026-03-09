@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Threat Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b0f;
+    --bg2: #0d1117;
+    --bg3: #111820;
+    --border: #1c2a3a;
+    --accent: #00e5ff;
+    --green: #00ff88;
+    --red: #ff3b5c;
+    --orange: #ff8c00;
+    --yellow: #f5c518;
+    --text: #c9d8e8;
+    --dim: #3d5268;
+    --textdim: #5a7a99;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; min-height: 100vh; }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px; border-bottom: 1px solid var(--border);
+    background: rgba(0,229,255,0.03); position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: var(--display); font-weight: 800; font-size: 15px; letter-spacing: 0.15em; color: var(--accent); }
+  .logo span { color: var(--textdim); font-weight: 400; font-size: 11px; margin-left: 10px; letter-spacing: 0.2em; }
+  .topbar-right { display: flex; gap: 24px; align-items: center; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--textdim); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  .dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); animation: fastpulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes fastpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+  .clock { font-size: 12px; color: var(--accent); letter-spacing: 0.08em; }
+
+  /* LAYOUT */
+  .grid { display: grid; grid-template-columns: 260px 1fr 280px; gap: 1px; background: var(--border); min-height: calc(100vh - 53px); }
+  .panel { background: var(--bg); padding: 20px; overflow: hidden; }
+  .panel-label { font-size: 9px; letter-spacing: 0.25em; color: var(--textdim); text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .panel-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* STATS */
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--border); grid-column: 1 / -1; }
+  .stat { background: var(--bg2); padding: 18px 22px; position: relative; overflow: hidden; }
+  .stat::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .stat.critical::before { background: var(--red); }
+  .stat.high::before { background: var(--orange); }
+  .stat.total::before { background: var(--green); }
+  .stat.incidents::before { background: #a855f7; }
+  .stat.events::before { background: var(--yellow); }
+  .stat.mitigated::before { background: var(--accent); }
+  .stat-num { font-family: var(--display); font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .stat.critical .stat-num { color: var(--red); }
+  .stat.high .stat-num { color: var(--orange); }
+  .stat.total .stat-num { color: var(--green); }
+  .stat.incidents .stat-num { color: #a855f7; }
+  .stat.events .stat-num { color: var(--yellow); }
+  .stat.mitigated .stat-num { color: var(--accent); }
+  .stat-lbl { font-size: 9px; letter-spacing: 0.2em; color: var(--textdim); text-transform: uppercase; }
+
+  /* BARS */
+  .bar-row { margin-bottom: 14px; }
+  .bar-top { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 11px; }
+  .bar-top span:last-child { color: var(--textdim); font-size: 10px; }
+  .bar-track { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+  .bar-fill.bf { background: var(--red); }
+  .bar-fill.pe { background: var(--orange); }
+  .bar-fill.de { background: var(--yellow); }
+  .bar-fill.cm { background: #a855f7; }
+
+  /* FEED */
+  .feed { overflow-y: auto; max-height: calc(100vh - 160px); }
+  .feed::-webkit-scrollbar { width: 3px; }
+  .feed::-webkit-scrollbar-thumb { background: var(--dim); }
+  .card { border-left: 3px solid var(--border); padding: 14px 16px; margin-bottom: 1px; background: var(--bg2); cursor: pointer; animation: slideIn 0.3s ease; position: relative; }
+  .card:hover { background: var(--bg3); }
+  .card.CRITICAL { border-left-color: var(--red); }
+  .card.HIGH { border-left-color: var(--orange); }
+  .card.MEDIUM { border-left-color: var(--yellow); }
+  .card.LOW { border-left-color: var(--accent); }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+  .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .badge { font-size: 9px; letter-spacing: 0.15em; font-weight: 700; padding: 2px 8px; border-radius: 2px; }
+  .badge.CRITICAL { background: rgba(255,59,92,0.2); color: var(--red); border: 1px solid rgba(255,59,92,0.3); }
+  .badge.HIGH { background: rgba(255,140,0,0.15); color: var(--orange); border: 1px solid rgba(255,140,0,0.3); }
+  .badge.MEDIUM { background: rgba(245,197,24,0.15); color: var(--yellow); border: 1px solid rgba(245,197,24,0.3); }
+  .badge.LOW { background: rgba(0,229,255,0.1); color: var(--accent); border: 1px solid rgba(0,229,255,0.2); }
+  .tag { font-size: 9px; letter-spacing: 0.1em; color: var(--textdim); background: var(--bg3); padding: 2px 8px; border-radius: 2px; text-transform: uppercase; }
+  .card-time { margin-left: auto; font-size: 10px; color: var(--textdim); }
+  .card-desc { font-size: 12px; color: var(--text); line-height: 1.5; margin-bottom: 6px; }
+  .card-meta { display: flex; gap: 14px; font-size: 10px; color: var(--textdim); }
+  .card-meta .k { color: var(--dim); margin-right: 3px; }
+  .mitre { font-size: 9px; color: var(--dim); margin-top: 4px; }
+  .score { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; }
+  .score svg { transform: rotate(-90deg); }
+  .score-txt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 11px; font-weight: 800; }
+  .empty { padding: 40px 0; text-align: center; color: var(--textdim); font-size: 11px; letter-spacing: 0.1em; }
+
+  /* INCIDENTS */
+  .inc { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .inc-id { font-size: 10px; color: var(--green); letter-spacing: 0.1em; margin-bottom: 3px; }
+  .inc-type { font-size: 11px; color: var(--text); margin-bottom: 3px; }
+  .inc-meta { font-size: 10px; color: var(--textdim); }
+  .inc-status { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 2px; margin-top: 4px; }
+  .open { background: rgba(255,59,92,0.15); color: var(--red); }
+  .investigating { background: rgba(255,140,0,0.15); color: var(--orange); }
+
+  /* SPARKLINE */
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; margin-top: 10px; }
+  .spark-bar { flex: 1; background: var(--accent); opacity: 0.35; border-radius: 1px 1px 0 0; min-height: 2px; transition: height 0.5s ease; }
+  .spark-bar.active { opacity: 1; background: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">CTDRS <span>CLOUD THREAT DETECTION & RESPONSE</span></div>
+  <div class="topbar-right">
+    <div class="status"><div class="dot"></div><span>MONITORING ACTIVE</span></div>
+    <div class="status" id="threat-status" style="display:none"><div class="dot red"></div><span style="color:var(--red)">ACTIVE THREAT</span></div>
+    <div class="clock" id="clock">00:00:00 UTC</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="stats">
+    <div class="stat critical"><div class="stat-num" id="c-critical">0</div><div class="stat-lbl">Critical</div></div>
+    <div class="stat high"><div class="stat-num" id="c-high">0</div><div class="stat-lbl">High</div></div>
+    <div class="stat total"><div class="stat-num" id="c-total">0</div><div class="stat-lbl">Total Alerts</div></div>
+    <div class="stat incidents"><div class="stat-num" id="c-incidents">0</div><div class="stat-lbl">Incidents</div></div>
+    <div class="stat events"><div class="stat-num" id="c-events">0</div><div class="stat-lbl">Events</div></div>
+    <div class="stat mitigated"><div class="stat-num" id="c-mitigated">0</div><div class="stat-lbl">Mitigated</div></div>
+  </div>
+
+  <!-- LEFT -->
+  <div class="panel">
+    <div class="panel-label">Threat Distribution</div>
+    <div class="bar-row"><div class="bar-top"><span>Brute Force</span><span id="p-bf">0%</span></div><div class="bar-track"><div class="bar-fill bf" id="b-bf" style="width:0%"></div></div></div>
+    <div class="bar-row"><div class="bar-top"><span>Privilege Escalation</span><span id="p-pe">0%</span></div><div class="bar-track"><div class="bar-fill pe" id="b-pe" style="width:0%"></div></div></div>
+    <div class="bar-row"><div class="bar-top"><span>Data Exfiltration</span><span id="p-de">0%</span></div><div class="bar-track"><div class="bar-fill de" id="b-de" style="width:0%"></div></div></div>
+    <div class="bar-row"><div class="bar-top"><span>Crypto Mining</span><span id="p-cm">0%</span></div><div class="bar-track"><div class="bar-fill cm" id="b-cm" style="width:0%"></div></div></div>
+    <div style="margin-top:24px"><div class="panel-label">Activity</div><div class="spark" id="spark"></div></div>
+    <div style="margin-top:24px"><div class="panel-label">Engine Status</div>
+      <div style="font-size:11px;line-height:2.2;color:var(--textdim)">
+        <div>IAM Rules <span style="color:var(--green);float:right">● ACTIVE</span></div>
+        <div>S3 Rules <span style="color:var(--green);float:right">● ACTIVE</span></div>
+        <div>Network Rules <span style="color:var(--green);float:right">● ACTIVE</span></div>
+        <div>Auto-Response <span style="color:var(--green);float:right">● ACTIVE</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="panel" style="padding:0">
+    <div style="padding:20px 20px 0"><div class="panel-label">Live Threat Feed</div></div>
+    <div class="feed" id="feed"><div class="empty" id="empty">Awaiting threat events...</div></div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="panel">
+    <div class="panel-label">Incident Log</div>
+    <div id="inclog"><div class="empty">No incidents yet</div></div>
+  </div>
+</div>
+
+<script>
+const S = {
+  alerts: [], incidents: [], known: new Set(),
+  counts: {critical:0,high:0,medium:0,low:0,total:0},
+  types: {brute_force:0,privilege_escalation:0,data_exfiltration:0,crypto_mining:0},
+  events: 0, mitigated: 0, incCount: 0,
+  spark: new Array(20).fill(0),
+};
+
+// Clock
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    `${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')} UTC`;
+}, 1000);
+
+function label(s) { return s>=8?'CRITICAL':s>=5?'HIGH':s>=3?'MEDIUM':'LOW'; }
+function color(s) { return {CRITICAL:'var(--red)',HIGH:'var(--orange)',MEDIUM:'var(--yellow)',LOW:'var(--accent)'}[s]||'var(--dim)'; }
+
+function scoreRing(score, lbl) {
+  const r=14, c=2*Math.PI*r, fill=(score/10)*c, col=color(lbl);
+  return `<div class="score"><svg viewBox="0 0 36 36" width="34" height="34">
+    <circle cx="18" cy="18" r="${r}" fill="none" stroke="var(--border)" stroke-width="2.5"/>
+    <circle cx="18" cy="18" r="${r}" fill="none" stroke="${col}" stroke-width="2.5"
+      stroke-dasharray="${fill} ${c}" stroke-linecap="round" transform="rotate(-90 18 18)"/>
+  </svg><div class="score-txt" style="color:${col}">${score}</div></div>`;
+}
+
+function addAlert(a) {
+  if (S.known.has(a.alert_id)) return;
+  S.known.add(a.alert_id);
+  S.alerts.push(a);
+  S.counts.total++;
+  S.counts[a.severity_label.toLowerCase()]++;
+  S.types[a.threat_type] = (S.types[a.threat_type]||0)+1;
+  S.events += a.event_count||1;
+  if (a.severity >= 8) S.mitigated++;
+  S.spark.push(a.event_count||1); S.spark.shift();
+
+  if (a.severity >= 5) {
+    S.incCount++;
+    S.incidents.push({id:`INC-${String(S.incCount).padStart(4,'0')}`,type:a.threat_type,severity:a.severity,user:a.affected_user,resource:a.affected_resource,time:new Date(a.timestamp).toLocaleTimeString('en-US',{hour12:false})});
+  }
+
+  renderCard(a);
+  renderInc();
+  updateStats();
+  renderSpark();
+}
+
+function renderCard(a) {
+  const feed = document.getElementById('feed');
+  document.getElementById('empty')?.remove();
+  const t = new Date(a.timestamp).toLocaleTimeString('en-US',{hour12:false});
+  const div = document.createElement('div');
+  div.className = `card ${a.severity_label}`;
+  div.innerHTML = `
+    <div class="card-top">
+      <span class="badge ${a.severity_label}">${a.severity_label}</span>
+      <span class="tag">${a.threat_type.replace(/_/g,' ')}</span>
+      <span class="card-time">${t}</span>
+    </div>
+    <div class="card-desc">${a.description}</div>
+    <div class="card-meta"><span><span class="k">IP</span>${a.source_ip}</span><span><span class="k">USER</span>${a.affected_user}</span><span><span class="k">EVENTS</span>${a.event_count}</span></div>
+    <div class="mitre">${a.mitre_technique}</div>
+    ${scoreRing(a.severity, a.severity_label)}`;
+  feed.insertBefore(div, feed.firstChild);
+}
+
+function renderInc() {
+  const el = document.getElementById('inclog');
+  el.innerHTML = S.incidents.slice().reverse().map(i=>`
+    <div class="inc">
+      <div class="inc-id">${i.id}</div>
+      <div class="inc-type">${i.type.replace(/_/g,' ').toUpperCase()}</div>
+      <div class="inc-meta">${i.user} · ${i.time}</div>
+      <span class="inc-status ${i.severity>=8?'open':'investigating'}">${i.severity>=8?'OPEN':'INVESTIGATING'}</span>
+    </div>`).join('');
+}
+
+function updateStats() {
+  document.getElementById('c-critical').textContent = S.counts.critical;
+  document.getElementById('c-high').textContent = S.counts.high;
+  document.getElementById('c-total').textContent = S.counts.total;
+  document.getElementById('c-incidents').textContent = S.incidents.length;
+  document.getElementById('c-events').textContent = S.events;
+  document.getElementById('c-mitigated').textContent = S.mitigated;
+  document.getElementById('threat-status').style.display = S.counts.critical > 0 ? 'flex' : 'none';
+  const tot = S.counts.total||1;
+  [['bf','brute_force'],['pe','privilege_escalation'],['de','data_exfiltration'],['cm','crypto_mining']].forEach(([code,type])=>{
+    const pct = Math.round((S.types[type]||0)/tot*100);
+    document.getElementById(`b-${code}`).style.width = pct+'%';
+    document.getElementById(`p-${code}`).textContent = pct+'%';
+  });
+}
+
+function renderSpark() {
+  const el = document.getElementById('spark');
+  const max = Math.max(...S.spark,1);
+  el.innerHTML = S.spark.map((v,i)=>`<div class="spark-bar ${i===S.spark.length-1?'active':''}" style="height:${Math.max(Math.round(v/max*100),4)}%"></div>`).join('');
+}
+
+// Demo alerts shown when backend is not running
+const DEMO = [
+  {alert_id:'d1',timestamp:new Date().toISOString(),threat_type:'brute_force',severity:9,severity_label:'CRITICAL',source_ip:'185.220.101.47',affected_user:'regular-user-alice',affected_resource:'IAM:ConsoleLogin',event_count:11,description:'11 failed logins from 185.220.101.47 in 60s',mitre_technique:'T1110 - Brute Force',recommended_action:'Block IP, reset credentials'},
+  {alert_id:'d2',timestamp:new Date().toISOString(),threat_type:'privilege_escalation',severity:9,severity_label:'CRITICAL',source_ip:'10.0.1.22',affected_user:'regular-user-bob',affected_resource:'IAM:AdministratorAccess',event_count:3,description:"Non-admin 'regular-user-bob' attached AdministratorAccess to self",mitre_technique:'T1098 - Account Manipulation',recommended_action:'Detach policy immediately'},
+  {alert_id:'d3',timestamp:new Date().toISOString(),threat_type:'data_exfiltration',severity:10,severity_label:'CRITICAL',source_ip:'45.142.212.100',affected_user:'regular-user-alice',affected_resource:'S3:company-secrets',event_count:67,description:"67 GetObject calls from 45.142.212.100 on 'company-secrets' in 120s",mitre_technique:'T1530 - Data from Cloud Storage',recommended_action:'Block IP, revoke credentials'},
+  {alert_id:'d4',timestamp:new Date().toISOString(),threat_type:'crypto_mining',severity:8,severity_label:'CRITICAL',source_ip:'91.108.56.200',affected_user:'svc-deploy-bot',affected_resource:'EC2:p3.2xlargeX8',event_count:8,description:"8x p3.2xlarge GPU instances launched by 'svc-deploy-bot'",mitre_technique:'T1496 - Resource Hijacking',recommended_action:'Terminate instances immediately'},
+  {alert_id:'d5',timestamp:new Date().toISOString(),threat_type:'brute_force',severity:6,severity_label:'HIGH',source_ip:'194.165.16.11',affected_user:'admin',affected_resource:'IAM:ConsoleLogin',event_count:6,description:'6 failed logins from 194.165.16.11 in 60s',mitre_technique:'T1110 - Brute Force',recommended_action:'Block IP, enable MFA'},
+];
+
+let demoIdx = 0;
+async function poll() {
+  try {
+    const r = await fetch('/api/alerts');
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    (d.alerts||[]).forEach(addAlert);
+  } catch {
+    if (demoIdx < DEMO.length) addAlert(DEMO[demoIdx++]);
+  }
+}
+
+renderSpark(); updateStats();
+setTimeout(poll, 800);
+setTimeout(poll, 2500);
+setTimeout(poll, 4500);
+setTimeout(poll, 7000);
+setTimeout(poll, 10000);
+setInterval(poll, 5000);
+</script>
+</body>
+</html>
