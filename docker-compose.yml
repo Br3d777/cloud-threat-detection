@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: ctd-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,iam,sns,sqs,logs
+      - DEFAULT_REGION=us-east-1
+    volumes:
+      - ./localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dashboard:
+    build: ./dashboard
+    container_name: ctd-dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - shared-alerts:/tmp/alerts
+      - shared-incidents:/tmp/incidents
+
+volumes:
+  shared-alerts:
+  shared-incidents:
+```
+
+Save and close, then:
+```
+git add docker-compose.yml
+```
+```
+git commit -m "infra: add docker-compose with LocalStack and dashboard services"
+```
+```
+git push
